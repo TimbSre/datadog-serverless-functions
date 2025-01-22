@@ -6,24 +6,20 @@ import os
 import re
 from io import BufferedReader, BytesIO
 
+from customized_log_group import (
+    get_lambda_function_name_from_logstream_name,
+    is_lambda_customized_log_group,
+    is_step_functions_log_group,
+)
+from settings import DD_CUSTOM_TAGS, DD_HOST, DD_SOURCE
 from steps.common import (
     add_service_tag,
     generate_metadata,
     merge_dicts,
     parse_event_source,
 )
-from customized_log_group import (
-    is_lambda_customized_log_group,
-    is_step_functions_log_group,
-    get_lambda_function_name_from_logstream_name,
-)
+from steps.enums import AwsCwEventSourcePrefix, AwsEventSource
 from steps.handlers.aws_attributes import AwsAttributes
-from steps.enums import AwsEventSource, AwsCwEventSourcePrefix
-from settings import (
-    DD_SOURCE,
-    DD_HOST,
-    DD_CUSTOM_TAGS,
-)
 
 logger = logging.getLogger()
 logger.setLevel(logging.getLevelName(os.environ.get("DD_LOG_LEVEL", "INFO").upper()))
@@ -145,14 +141,12 @@ class AwsLogsHandler:
             case AwsEventSource.STEPFUNCTION:
                 self.handle_step_function_source(metadata, aws_attributes)
 
-    def handle_verified_access_source(self, metadata, aws_attributes):
-        try:
-            message = json.loads(aws_attributes.get_log_events()[0].get("message"))
-            metadata[DD_HOST] = message.get("http_request").get("url").get("hostname")
-        except Exception as e:
-            logger.debug("Unable to set verified-access log host: %s" % e)
-
     def handle_step_function_source(self, metadata, aws_attributes):
+        if not self.cache_layer.get_step_functions_tags_cache().should_fetch_tags():
+            # If not tags enrichment done locally
+            # We let Datadog enrich it with Resource Collection data
+            return
+
         state_machine_arn = self.get_state_machine_arn(aws_attributes)
         if not state_machine_arn:
             return
@@ -176,6 +170,25 @@ class AwsLogsHandler:
                 + ["dd_step_functions_trace_enabled:true"]
             )
 
+    def get_state_machine_arn(self, aws_attributes):
+        try:
+            message = json.loads(aws_attributes.get_log_events()[0].get("message"))
+            if message.get("execution_arn") is not None:
+                execution_arn = message["execution_arn"]
+                arn_tokens = re.split(r"[:/\\]", execution_arn)
+                arn_tokens[5] = "stateMachine"
+                return ":".join(arn_tokens[:7])
+        except Exception as e:
+            logger.debug("Unable to get state_machine_arn: %s" % e)
+        return ""
+
+    def handle_verified_access_source(self, metadata, aws_attributes):
+        try:
+            message = json.loads(aws_attributes.get_log_events()[0].get("message"))
+            metadata[DD_HOST] = message.get("http_request").get("url").get("hostname")
+        except Exception as e:
+            logger.debug("Unable to set verified-access log host: %s" % e)
+
     def process_eks_logs(self, metadata, aws_attributes):
         log_stream = aws_attributes.get_log_stream()
         if log_stream.startswith("kube-apiserver-audit-"):
@@ -189,18 +202,6 @@ class AwsLogsHandler:
         elif log_stream.startswith("authenticator-"):
             metadata[DD_SOURCE] = "aws-iam-authenticator"
         # In case the conditions above don't match we maintain eks as the source
-
-    def get_state_machine_arn(self, aws_attributes):
-        try:
-            message = json.loads(aws_attributes.get_log_events()[0].get("message"))
-            if message.get("execution_arn") is not None:
-                execution_arn = message["execution_arn"]
-                arn_tokens = re.split(r"[:/\\]", execution_arn)
-                arn_tokens[5] = "stateMachine"
-                return ":".join(arn_tokens[:7])
-        except Exception as e:
-            logger.debug("Unable to get state_machine_arn: %s" % e)
-        return ""
 
     # Lambda logs can be from either default or customized log group
     def process_lambda_logs(self, metadata, aws_attributes):
