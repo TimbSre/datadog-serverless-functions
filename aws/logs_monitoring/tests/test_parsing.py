@@ -1,14 +1,8 @@
 import unittest
 
-from steps.common import (
-    parse_event_source,
-    get_service_from_tags_and_remove_duplicates,
-)
+from settings import DD_CUSTOM_TAGS, DD_SOURCE
+from steps.common import get_service_from_tags_and_remove_duplicates, parse_event_source
 from steps.enums import AwsEventSource
-from settings import (
-    DD_CUSTOM_TAGS,
-    DD_SOURCE,
-)
 
 
 class TestParseEventSource(unittest.TestCase):
@@ -84,22 +78,6 @@ class TestParseEventSource(unittest.TestCase):
             str(AwsEventSource.LAMBDA),
         )
 
-    def test_apigateway_event(self):
-        self.assertEqual(
-            parse_event_source(
-                {"awslogs": "logs"}, "Api-Gateway-Execution-Logs_a1b23c/test"
-            ),
-            str(AwsEventSource.APIGATEWAY),
-        )
-        self.assertEqual(
-            parse_event_source({"awslogs": "logs"}, "/aws/api-gateway/my-project"),
-            str(AwsEventSource.APIGATEWAY),
-        )
-        self.assertEqual(
-            parse_event_source({"awslogs": "logs"}, "/aws/http-api/my-project"),
-            str(AwsEventSource.APIGATEWAY),
-        )
-
     def test_dms_event(self):
         self.assertEqual(
             parse_event_source({"awslogs": "logs"}, "dms-tasks-test-instance"),
@@ -118,14 +96,6 @@ class TestParseEventSource(unittest.TestCase):
                 {"awslogs": "logs"}, "sns/us-east-1/123456779121/SnsTopicX"
             ),
             str(AwsEventSource.SNS),
-        )
-
-    def test_codebuild_event(self):
-        self.assertEqual(
-            parse_event_source(
-                {"awslogs": "logs"}, "/aws/codebuild/new-project-sample"
-            ),
-            str(AwsEventSource.CODEBUILD),
         )
 
     def test_kinesis_event(self):
@@ -197,7 +167,7 @@ class TestParseEventSource(unittest.TestCase):
                 {"Records": ["logs-from-s3"]},
                 "AWSLogs/123456779121/redshift/us-east-1/2020/10/21/123456779121_redshift_us-east-1_mycluster_userlog_2020-10-21T18:01.gz",
             ),
-            str(AwsEventSource.REDSHIFT),
+            str(AwsEventSource.S3),
         )
 
     def test_redshift_gov_event(self):
@@ -207,7 +177,7 @@ class TestParseEventSource(unittest.TestCase):
                 "AWSLogs/123456779121/redshift/us-gov-east-1/2020/10/21/123456779121_redshift_us-gov-east"
                 "-1_mycluster_userlog_2020-10-21T18:01.gz",
             ),
-            str(AwsEventSource.REDSHIFT),
+            str(AwsEventSource.S3),
         )
 
     def test_route53_event(self):
@@ -237,22 +207,13 @@ class TestParseEventSource(unittest.TestCase):
             str(AwsEventSource.FARGATE),
         )
 
-    def test_appsync_event(self):
-        self.assertEqual(
-            parse_event_source(
-                {"awslogs": "logs"},
-                "/aws/appsync/apis/",
-            ),
-            str(AwsEventSource.APPSYNC),
-        )
-
     def test_cloudfront_event(self):
         self.assertEqual(
             parse_event_source(
                 {"Records": ["logs-from-s3"]},
                 "AWSLogs/cloudfront/123456779121/test/01.gz",
             ),
-            str(AwsEventSource.CLOUDFRONT),
+            str(AwsEventSource.S3),
         )
 
     def test_eks_event(self):

@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 from approvaltests.combination_approvals import verify_all_combinations
 
 from caching.cache_layer import CacheLayer
+from settings import DD_CUSTOM_TAGS, DD_SOURCE
 from steps.handlers.s3_handler import S3EventDataStore, S3EventHandler
 
 
@@ -18,7 +19,9 @@ class TestS3EventsHandler(unittest.TestCase):
 
     def __init__(self, methodName: str = "runTest") -> None:
         super().__init__(methodName)
-        self.s3_handler = S3EventHandler(self.Context(), {"ddtags": ""}, MagicMock())
+        self.s3_handler = S3EventHandler(
+            self.Context(), {DD_CUSTOM_TAGS: ""}, MagicMock()
+        )
 
     def parse_lines(self, data, key, source):
         bucket = "my-bucket"
@@ -140,7 +143,27 @@ class TestS3EventsHandler(unittest.TestCase):
             ],
         )
         self.assertEqual(self.s3_handler.metadata["ddsource"], "s3")
-        self.assertEqual(self.s3_handler.metadata["host"], "arn:aws:s3:::my-bucket")
+
+    def test_s3_handler_overriden_source(self):
+        event = {
+            "Records": [
+                {
+                    "s3": {
+                        "bucket": {"name": "tf-bedrock"},
+                        "object": {"key": "bedrock-run"},
+                    }
+                }
+            ]
+        }
+
+        self.s3_handler = S3EventHandler(
+            self.Context(), {DD_CUSTOM_TAGS: "", DD_SOURCE: "something"}, MagicMock()
+        )
+
+        self.s3_handler._extract_data = MagicMock()
+        self.s3_handler.data_store.data = "data".encode("utf-8")
+        self.s3_handler.handle(event)
+        self.assertEqual(self.s3_handler.metadata["ddsource"], "something")
 
     def test_s3_handler_with_multiline_regex(self):
         event = {
@@ -207,36 +230,12 @@ class TestS3EventsHandler(unittest.TestCase):
             ],
         )
         self.assertEqual(self.s3_handler.metadata["ddsource"], "s3")
-        self.assertEqual(self.s3_handler.metadata["host"], "arn:aws:s3:::my-bucket")
-
-    @patch("steps.handlers.s3_handler.S3EventHandler._get_s3_client")
-    def test_s3_tags_not_added_to_metadata(self, mock_get_s3_client):
-        mock_get_s3_client.side_effect = MagicMock()
-        cache_layer = CacheLayer("")
-        cache_layer._s3_tags_cache.get = MagicMock(return_value=["s3_tag:tag_value"])
-        self.s3_handler.cache_layer = cache_layer
-        event = {
-            "Records": [
-                {
-                    "s3": {
-                        "bucket": {"name": "mybucket"},
-                        "object": {"key": "mykey"},
-                    }
-                }
-            ]
-        }
-
-        _ = list(self.s3_handler.handle(event))
-
-        assert "s3_tag:tag_value" not in self.s3_handler.metadata["ddtags"]
 
     @patch("caching.cloudwatch_log_group_cache.CloudwatchLogGroupTagsCache.__init__")
-    @patch("steps.handlers.s3_handler.S3EventHandler._parse_service_arn")
     @patch("steps.handlers.s3_handler.S3EventHandler._get_s3_client")
     def test_s3_tags_added_to_metadata(
         self,
         mock_get_s3_client,
-        mock_parse_service_arn,
         mock_cache_init,
     ):
         mock_get_s3_client.side_effect = MagicMock()
@@ -255,7 +254,6 @@ class TestS3EventsHandler(unittest.TestCase):
             ]
         }
 
-        mock_parse_service_arn.return_value = ""
         _ = list(self.s3_handler.handle(event))
 
         assert "s3_tag:tag_value" in self.s3_handler.metadata["ddtags"]
@@ -299,7 +297,7 @@ class TestS3EventsHandler(unittest.TestCase):
         )
         self.assertEqual(
             self.s3_handler.data_store.source,
-            "cloudfront",
+            "s3",
         )
 
     def test_set_source_transit_gateway(self):

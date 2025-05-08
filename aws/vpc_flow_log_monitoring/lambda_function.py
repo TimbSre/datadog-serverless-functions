@@ -108,13 +108,13 @@ logger.info("Lambda function initialized, ready to send metrics")
 
 def process_message(message, tags, timestamp, node_ip):
     (
-        version,
-        account_id,
+        _,
+        _,
         interface_id,
         srcaddr,
         dstaddr,
-        srcport,
-        dstport,
+        _,
+        _,
         protocol,
         packets,
         _bytes,
@@ -243,7 +243,6 @@ def protocol_id_to_name(protocol):
         81: "VMTP",
         82: "SECURE-VMTP",
         83: "VINES",
-        84: "TTP",
         84: "IPTM",
         85: "NSFNET-IGP",
         86: "DGP",
@@ -352,6 +351,9 @@ class Stats(object):
     def __init__(self):
         self._initialize()
         self.metric_prefix = "aws.vpc.flowlogs"
+        # limit input size at 3.2MB see https://docs.datadoghq.com/api/latest/metrics/#submit-metrics
+        # set to 3MB to account for the overhead of the json encoding
+        self.max_batch_size_bytes = 3000000
 
     def increment(self, metric, value=1, timestamp=None, tags=None):
         metric_name = "%s.%s" % (self.metric_prefix, metric)
@@ -410,19 +412,43 @@ class Stats(object):
 
         self._initialize()
 
-        metrics_dict = {
-            "series": series,
-        }
-
         creds = urlencode(datadog_keys)
-        data = json.dumps(metrics_dict).encode("utf-8")
         url = "%s?%s" % (
             datadog_keys.get("api_host", "https://api.%s/api/v1/series" % DD_SITE),
             creds,
         )
-        req = Request(url, data, {"Content-Type": "application/json"})
-        response = urlopen(req)
-        logger.info(f"INFO Submitted data with status {response.getcode()}")
+        batches = self.batch_series(series)
+        for batch in batches:
+            metrics_dict = {
+                "series": batch,
+            }
+            data = json.dumps(metrics_dict).encode("utf-8")
+            req = Request(url, data, {"Content-Type": "application/json"})
+            response = urlopen(req)
+            logger.info(f"INFO Submitted data with status {response.getcode()}")
+
+    def batch_series(self, series):
+        batches = []
+        batch = []
+        size_bytes = 0
+        for s in series:
+            item_size_bytes = self._sizeof_bytes(s)
+            if size_bytes + item_size_bytes > self.max_batch_size_bytes:
+                batches.append(batch)
+                batch = []
+                size_bytes = 0
+            # all items exceeding max_item_size_bytes are dropped here
+            if item_size_bytes > self.max_batch_size_bytes:
+                continue
+            batch.append(s)
+            size_bytes += item_size_bytes
+        # add the last batch if it's not empty
+        if size_bytes > 0:
+            batches.append(batch)
+        return batches
+
+    def _sizeof_bytes(self, item):
+        return len(str(item).encode("UTF-8"))
 
 
 stats = Stats()

@@ -45,7 +45,9 @@ class AwsLogsHandler:
         # Set account and region from lambda function ARN
         self.set_account_region(aws_attributes)
         # Set the source on the logs
-        self.set_source(event, metadata, aws_attributes)
+        if metadata.get(DD_SOURCE) is None:
+            self.set_source(event, metadata, aws_attributes)
+
         # Add custom tags from cache
         self.add_cloudwatch_tags_from_cache(metadata, aws_attributes)
         # Set service from custom tags, which may include the tags set on the log group
@@ -95,8 +97,6 @@ class AwsLogsHandler:
             source = str(AwsEventSource.CLOUDTRAIL)
         if str(AwsCwEventSourcePrefix.TRANSITGATEWAY) in log_stream:
             source = str(AwsEventSource.TRANSITGATEWAY)
-        if str(AwsCwEventSourcePrefix.BEDROCK) in log_stream:
-            source = str(AwsEventSource.BEDROCK)
         metadata[DD_SOURCE] = parse_event_source(event, source)
 
         # Special handling for customized log group of Lambda Functions and Step Functions
@@ -134,8 +134,6 @@ class AwsLogsHandler:
         match metadata_source:
             case AwsEventSource.CLOUDWATCH:
                 metadata[DD_HOST] = log_group
-            case AwsEventSource.APPSYNC:
-                metadata[DD_HOST] = log_group.split("/")[-1]
             case AwsEventSource.VERIFIED_ACCESS:
                 self.handle_verified_access_source(metadata, aws_attributes)
             case AwsEventSource.STEPFUNCTION:

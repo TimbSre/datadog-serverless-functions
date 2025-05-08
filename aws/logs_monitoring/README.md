@@ -116,7 +116,7 @@ If you can't install the Forwarder using the provided CloudFormation template, y
 1. Create a Python 3.12 Lambda function using `aws-dd-forwarder-<VERSION>.zip` from the latest [releases][101].
 2. Save your [Datadog API key][102] in AWS Secrets Manager, set environment variable `DD_API_KEY_SECRET_ARN` with the secret ARN on the Lambda function, and add the `secretsmanager:GetSecretValue` permission to the Lambda execution role.
 3. If you need to forward logs from S3 buckets, add the `s3:GetObject` permission to the Lambda execution role.
-4. Set the environment variable `DD_ENHANCED_METRICS` to `false` on the Forwarder. This stops the Forwarder from generating enhanced metrics itself, but it will still forward custom metrics from other lambdas.
+4. Set the environment variable `DD_ENHANCED_METRICS` to `false` on the Forwarder. This stops the Forwarder from generating enhanced metrics itself, but it will still forward custom metrics from other lambdas.DdFetchLambdaTags
 5. Some AWS accounts are configured such that triggers will not automatically create resource-based policies allowing Cloudwatch log groups to invoke the forwarder. Reference the [CloudWatchLogPermissions][103] to see which permissions are required for the forwarder to be invoked by Cloudwatch Log Events.
 6. [Configure triggers][104].
 7. Create an S3 bucket, and set environment variable `DD_S3_BUCKET_NAME` to the bucket name. Also provide `s3:GetObject`, `s3:PutObject`, `s3:ListBucket`, and `s3:DeleteObject` permissions on this bucket to the Lambda execution role. This bucket is used to store the different tags cache i.e. Lambda, S3, Step Function and Log Group. Additionally, this bucket will be used to store unforwarded events incase of forwarding exceptions.
@@ -125,6 +125,10 @@ If you can't install the Forwarder using the provided CloudFormation template, y
 ```bash
 aws lambda invoke --function-name <function-name> --payload '{"retry":"true"}' out
 ```
+
+<div class="alert alert-warning">
+The <a href="#cloudformation-parameters">environment variables provided on this page</a> are formatted for CloudFormation and Terraform. If you are installing the Forwarder manually, convert these parameter names from Pascal case to screaming snake case. For example, <code>DdApiKey</code> becomes <code>DD_API_KEY</code>, and <code>ExcludeAtMatch</code> becomes <code>EXCLUDE_AT_MATCH</code>.
+</div>
 
 [101]: https://github.com/DataDog/datadog-serverless-functions/releases
 [102]: https://app.datadoghq.com/organization-settings/api-keys
@@ -141,6 +145,9 @@ aws lambda invoke --function-name <function-name> --payload '{"retry":"true"}' o
 3. Update the stack using template `https://datadog-cloudformation-template.s3.amazonaws.com/aws/forwarder/latest.yaml`. You can also replace `latest` with a specific version, such as `3.73.0.yaml`, if needed. Make sure to review the changesets before applying the update.
 
 If you encounter issues upgrading to the latest version, check the Troubleshooting section.
+
+### Upgrade an older verison to 4.3.0+
+Starting verison 4.3.0 Lambda forwarder will support a single python version only. The supported Python version of this release is 3.12. 
 
 ### Upgrade an older version to +4.0.0
 Starting version 4.0.0 `source`, `service` and `host` identification logic will be pulled out from the Lambda forwarder's code and set in directly in Datadog's backend. The first migrated log source is `RDS`.
@@ -333,6 +340,10 @@ Otherwise, if you are using Web Proxy:
 The Datadog Forwarder is signed by Datadog. To verify the integrity of the Forwarder, use the manual installation method. [Create a Code Signing Configuration][19] that includes Datadog’s Signing Profile ARN (`arn:aws:signer:us-east-1:464622532012:/signing-profiles/DatadogLambdaSigningProfile/9vMI9ZAGLc`) and associate it with the Forwarder Lambda function before uploading the Forwarder ZIP file.
 
 ## CloudFormation parameters
+
+<div class="alert alert-warning">
+The following parameters are used in CloudFormation and Terraform. If you are installing the Forwarder manually, convert these parameter names from Pascal case to screaming snake case. For example, <code>DdApiKey</code> becomes <code>DD_API_KEY</code>, and <code>ExcludeAtMatch</code> becomes <code>EXCLUDE_AT_MATCH</code>.
+</div>
 
 ### Required
 
@@ -573,6 +584,15 @@ The CloudFormation Stack creates following IAM roles:
   }
 ]
 ```
+
+## Service Tag Setting
+The value of the `service` tag is determined based on multiple inputs. These inputs are ranked by priority from highest to lowest
+1. Log message custom tags: If the log message has a `ddtags` key which contains a `service` tag value, it will be used to override the `service` tag in the log event.
+2. Lambda tags cache (applicable for Lambda logs only): Activating `DdFetchLambdaTags` will fetch and store all Lambda functions tags and will override the `service` tag if it wasn't set previously or was set to a default value i.e. `source` value.
+3. Cloudwatch log group tags cache (applicable for Cloudwatch logs only): Activating `DdFetchLogGroupTags` will fetch and store all Cloudwatch log groups tags which are added to the `ddtags` entry in the log event. If `service` tag value was set in the tags cache it will be used to set the `service` tag for the log event.
+4. Directly setting a `service` tag value in the forwarder's `ddtags` ENV var. 
+5. Default value equal to the `source` tag.
+
 
 ## Further Reading
 

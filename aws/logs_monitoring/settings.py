@@ -134,6 +134,9 @@ else:
 ## @param DD_USE_VPC
 DD_USE_VPC = get_env_var("DD_USE_VPC", "false", boolean=True)
 
+## @param DD_CUSTOM_SOURCE
+DD_CUSTOM_SOURCE = get_env_var("DD_SOURCE", "")
+
 # DEPRECATED. No longer need to use special endpoints, as you can now expose
 # regular Datadog API endpoints `api`, `http-intake.logs` and `trace.agent`
 # via PrivateLink. See https://docs.datadoghq.com/agent/guide/private-link/.
@@ -156,22 +159,27 @@ if DD_USE_PRIVATE_LINK:
 
 
 class ScrubbingRuleConfig(object):
-    def __init__(self, name, pattern, placeholder):
+    def __init__(self, name, pattern, placeholder, enabled=True):
         self.name = name
         self.pattern = pattern
         self.placeholder = placeholder
+        self.enabled = enabled
 
 
 # Scrubbing sensitive data
 # Option to redact all pattern that looks like an ip address / email address / custom pattern
 SCRUBBING_RULE_CONFIGS = [
     ScrubbingRuleConfig(
-        "REDACT_IP", r"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}", "xxx.xxx.xxx.xxx"
+        "REDACT_IP",
+        r"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}",
+        "xxx.xxx.xxx.xxx",
+        get_env_var("REDACT_IP", "false", boolean=True),
     ),
     ScrubbingRuleConfig(
         "REDACT_EMAIL",
         r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+",
         "xxxxx@xxxxx.com",
+        get_env_var("REDACT_EMAIL", "false", boolean=True),
     ),
     ScrubbingRuleConfig(
         "DD_SCRUBBING_RULE",
@@ -267,15 +275,14 @@ DD_SOURCE = "ddsource"
 DD_CUSTOM_TAGS = "ddtags"
 DD_SERVICE = "service"
 DD_HOST = "host"
-DD_FORWARDER_VERSION = "4.1.0"
+DD_FORWARDER_VERSION = "4.5.0"
 
 # CONST STRINGS
 AWS_STRING = "aws"
-FUNCTIONVERSION_STRING = "function_version"
 INVOKEDFUNCTIONARN_STRING = "invoked_function_arn"
 SOURCECATEGORY_STRING = "ddsourcecategory"
+FUNCTIONVERSION_STRING = "function_version"
 FORWARDERNAME_STRING = "forwardername"
-FORWARDERMEMSIZE_STRING = "forwarder_memorysize"
 FORWARDERVERSION_STRING = "forwarder_version"
 GOV_STRING = "gov"
 CN_STRING = "cn"

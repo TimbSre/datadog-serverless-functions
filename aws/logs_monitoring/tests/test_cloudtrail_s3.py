@@ -1,11 +1,15 @@
-from unittest.mock import MagicMock, patch
+import copy
+import gzip
+import io
+import json
 import os
 import sys
 import unittest
-import json
-import copy
-import io
-import gzip
+from unittest.mock import MagicMock, patch
+
+import lambda_function
+from caching.cache_layer import CacheLayer
+from steps.parsing import parse
 
 sys.modules["trace_forwarder.connection"] = MagicMock()
 sys.modules["datadog_lambda.wrapper"] = MagicMock()
@@ -22,15 +26,11 @@ env_patch = patch.dict(
     },
 )
 env_patch.start()
-import lambda_function
-from steps.parsing import parse
-from caching.cache_layer import CacheLayer
-
 env_patch.stop()
 
 
 class Context:
-    function_version = 0
+    function_version = "$LATEST"
     invoked_function_arn = "invoked_function_arn"
     function_name = "function_name"
     memory_limit_in_mb = "10"
@@ -144,7 +144,6 @@ class TestS3CloudwatchParsing(unittest.TestCase):
                         "bucket": payload["s3"]["bucket"]["name"],
                         "key": payload["s3"]["object"]["key"],
                     },
-                    "function_version": context.function_version,
                     "invoked_function_arn": context.invoked_function_arn,
                 },
             }

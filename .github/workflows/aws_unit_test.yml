@@ -1,23 +1,19 @@
-name: Python unit tests
+name: AWS Python unit tests
 
 on: [pull_request]
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    strategy:
-      max-parallel: 4
-      matrix:
-        python-version: ['3.11', '3.12']
     steps:
       - name: Checkout source
         uses: actions/checkout@v3
-      - name: Setup Python ${{ matrix.python-version }}
+      - name: Setup Python 3.12
         uses: actions/setup-python@v3
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: 3.12
 
-      - name: Run Python unit tests
+      - name: AWS Python unit tests
         env:
           AWS_DEFAULT_REGION: us-east-1
           DD_API_KEY: "11111111111111111111111111111111"
@@ -26,3 +22,4 @@ jobs:
           pip install boto3 mock approvaltests
           python -m unittest discover ./aws/logs_monitoring/
           python -m unittest discover ./aws/rds_enhanced_monitoring/
+          python -m unittest discover ./aws/vpc_flow_log_monitoring/
