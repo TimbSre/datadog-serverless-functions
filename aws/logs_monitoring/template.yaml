@@ -3,8 +3,8 @@ Description: Pushes logs, metrics and traces from AWS to Datadog.
 Mappings:
   Constants:
     DdForwarder:
-      Version: 5.0.0
-      LayerVersion: "91"
+      Version: 5.1.1
+      LayerVersion: "93"
 Parameters:
   DdApiKey:
     Type: String
@@ -75,6 +75,10 @@ Parameters:
     Type: String
     Default: ""
     Description: Add custom tags to forwarded logs, comma-delimited string, no trailing comma, e.g., env:prod,stack:classic
+  DdSource:
+    Type: String
+    Default: ""
+    Description: Override the source attribute for all logs forwarded by Lambda Forwarder. By default, the Forwarder automatically detects the source based on the log origin (e.g., lambda, s3, cloudwatch, rds). When set, all logs will use the specified source value instead, and a source_overridden:true tag will be added to the logs.
   DdEnrichS3Tags:
     Type: String
     Default: true
@@ -261,6 +265,17 @@ Parameters:
       - true
       - false
     Description: Set to true to enable the forwarder to store events that failed to send to Datadog.
+  DdScheduleRetryFailedEvents:
+    Type: String
+    Default: false
+    AllowedValues:
+      - true
+      - false
+    Description: Set to true to enable a scheduled forwarder invocation (via AWS EventBridge) to process stored failed events.
+  DdScheduleRetryInterval:
+    Type: Number
+    Default: 6
+    Description: Interval in hours for scheduled forwarder invocation (via AWS EventBridge).
   DdForwarderExistingBucketName:
     Type: String
     Default: ""
@@ -281,7 +296,7 @@ Parameters:
     AllowedValues:
       - "true"
       - "false"
-    Description: Set to false to disable trace creation and forwarding. See https://docs.datadoghq.com/tracing/trace_collection/library_config/python/#traces
+    Description: Set to false to disable trace creation and forwarding for the forwarder itself. Enabling this may incur additional Serverless APM charges. See https://docs.datadoghq.com/tracing/trace_collection/library_config/python/#traces
   DdEnhancedMetrics:
     Type: String
     Default: "false"
@@ -292,7 +307,7 @@ Parameters:
   KmsKeyList:
     Type: CommaDelimitedList
     Default: ""
-    Description: List of KMS Key ARNs the Lambda forwarder function can use to decrypt, seperated by comma  
+    Description: List of KMS Key ARNs the Lambda forwarder function can use to decrypt, seperated by comma
 Conditions:
   IsAWSChina: !Equals [!Ref "AWS::Partition", aws-cn]
   IsGovCloud: !Equals [!Ref "AWS::Partition", aws-us-gov]
@@ -314,6 +329,8 @@ Conditions:
   SetS3SourceZip: !Equals [!Select [0, !Split [/, !Ref SourceZipUrl]], "s3:"]
   SetDdTags: !Not
     - !Equals [!Ref DdTags, ""]
+  SetDdSource: !Not
+    - !Equals [!Ref DdSource, ""]
   SetDdNoSsl: !Equals [!Ref DdNoSsl, true]
   SetDdUrl: !Not
     - !Equals [!Ref DdUrl, ""]
@@ -384,6 +401,9 @@ Conditions:
     - !Equals [!Ref DdLogLevel, ""]
   SetDdForwarderDecryptKeys: !Not
     - !Equals [!Join ["", !Ref KmsKeyList], ""]
+  CreateRetryScheduler: !And
+    - !Equals [!Ref DdStoreFailedEvents, true]
+    - !Equals [!Ref DdScheduleRetryFailedEvents, true]
 Rules:
   MustSetDdApiKey:
     Assertions:
@@ -462,6 +482,10 @@ Resources:
           DD_TAGS: !If
             - SetDdTags
             - !Ref DdTags
+            - !Ref AWS::NoValue
+          DD_SOURCE: !If
+            - SetDdSource
+            - !Ref DdSource
             - !Ref AWS::NoValue
           DD_TAGS_CACHE_TTL_SECONDS: !Ref TagsCacheTTLSeconds
           DD_ENRICH_S3_TAGS: !Ref DdEnrichS3Tags
@@ -970,6 +994,50 @@ Resources:
                       - - "arn:*:s3:::"
                         - !Select [1, !Split ["s3://", !Ref SourceZipUrl]]
                 - !Ref AWS::NoValue
+  SchedulerRole:
+    Type: AWS::IAM::Role
+    Condition: CreateRetryScheduler
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: !If
+                - IsAWSChina
+                - "scheduler.amazonaws.com.cn"
+                - "scheduler.amazonaws.com"
+      PermissionsBoundary: !If
+        - SetPermissionsBoundary
+        - !Ref PermissionsBoundaryArn
+        - !Ref AWS::NoValue
+      Policies:
+        - PolicyName: SchedulerRolePolicy0
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource:
+                  - !GetAtt
+                    - Forwarder
+                    - Arn
+  Scheduler:
+    Type: AWS::Scheduler::Schedule
+    Condition: CreateRetryScheduler
+    Properties:
+      Name: !Sub "${AWS::StackName}-retry"
+      Description: Retry the failed events from the Datadog Lambda Forwarder
+      ScheduleExpression: !Sub "rate(${DdScheduleRetryInterval} hours)"
+      FlexibleTimeWindow:
+        Mode: "OFF"
+      Target:
+        Arn: !GetAtt "Forwarder.Arn"
+        RoleArn: !GetAtt "SchedulerRole.Arn"
+        Input: '{"retry": true}'
 Outputs:
   DatadogForwarderArn:
     Description: Datadog Forwarder Lambda Function ARN

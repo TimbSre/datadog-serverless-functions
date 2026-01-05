@@ -92,19 +92,27 @@ class Forwarder(object):
                 log = add_retry_tag(log)
 
             evaluated_log = log
+            to_forward = None
 
             # apply scrubbing rules to inner log message
-            if isinstance(log, dict) and log.get("message"):
-                try:
-                    log["message"] = scrubber.scrub(log["message"])
-                    evaluated_log = log["message"]
-                except Exception as e:
-                    logger.error(
-                        f"Exception while scrubbing log message {log['message']}: {e}"
-                    )
+            if isinstance(log, dict):
+                if log.get("message"):
+                    try:
+                        log["message"] = scrubber.scrub(log["message"])
+                        evaluated_log = log["message"]
+                    except Exception as e:
+                        logger.error(
+                            f"Exception while scrubbing log message {log['message']}: {e}"
+                        )
+                else:
+                    to_forward = dump_event(log)
+                    evaluated_log = to_forward
 
             if matcher.match(evaluated_log):
-                logs_to_forward.append(json.dumps(log, ensure_ascii=False))
+                if to_forward is None:
+                    logs_to_forward.append(dump_event(log))
+                else:
+                    logs_to_forward.append(to_forward)
 
         batcher = DatadogBatcher(512 * 1000, 4 * 1000 * 1000, 400)
         cli = DatadogHTTPClient(
@@ -127,6 +135,9 @@ class Forwarder(object):
 
         if DD_STORE_FAILED_EVENTS and len(failed_logs) > 0 and not key:
             self.storage.store_data(RetryPrefix.LOGS, failed_logs)
+
+        if len(failed_logs) > 0:
+            send_event_metric("logs_failed", failed_logs)
 
         send_event_metric("logs_forwarded", len(logs_to_forward) - len(failed_logs))
 
@@ -156,6 +167,9 @@ class Forwarder(object):
         if DD_STORE_FAILED_EVENTS and len(failed_metrics) > 0 and not key:
             self.storage.store_data(RetryPrefix.METRICS, failed_metrics)
 
+        if len(failed_metrics) > 0:
+            send_event_metric("metrics_failed", failed_metrics)
+
         send_event_metric("metrics_forwarded", len(metrics) - len(failed_metrics))
 
     def _forward_traces(self, traces, key=None):
@@ -180,3 +194,7 @@ class Forwarder(object):
             if key:
                 self.storage.delete_data(key)
             send_event_metric("traces_forwarded", len(traces))
+
+
+def dump_event(event):
+    return json.dumps(event, ensure_ascii=False)
