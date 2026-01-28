@@ -242,12 +242,10 @@ def is_api_key_valid():
 
     # Check if the API key is the correct number of characters
     if len(DD_API_KEY) != 32:
-        raise Exception(
-            f"""
+        raise Exception(f"""
             Invalid Datadog API key format. Expected 32 characters, received {len(DD_API_KEY)}.
             Verify your API key at https://app.{DD_SITE}/organization-settings/api-keys
-            """
-        )
+            """)
 
     # Validate the API key
     logger.debug("Validating the Datadog API key")
@@ -339,7 +337,7 @@ DD_SOURCE = "ddsource"
 DD_CUSTOM_TAGS = "ddtags"
 DD_SERVICE = "service"
 DD_HOST = "host"
-DD_FORWARDER_VERSION = "5.1.1"
+DD_FORWARDER_VERSION = "5.2.1"
 
 # CONST STRINGS
 AWS_STRING = "aws"

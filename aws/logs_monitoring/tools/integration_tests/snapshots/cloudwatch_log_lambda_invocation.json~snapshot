@@ -341,7 +341,7 @@
       ],
       "headers": {
         "Accept": "*/*",
-        "Accept-Encoding": "gzip, deflate",
+        "Accept-Encoding": "gzip, deflate, zstd",
         "Connection": "keep-alive",
         "Content-Length": "<redacted from snapshot>",
         "Content-type": "application/json",
@@ -722,55 +722,14 @@
             "device": null,
             "host": null,
             "interval": 10,
-            "metric": "aws.dd_forwarder.loggroup_cache_fetch_failure",
-            "points": "<redacted from snapshot>",
-            "tags": [
-              "forwardername:test_function",
-              "forwarder_memorysize:3008",
-              "forwarder_version:<redacted from snapshot>",
-              "event_type:awslogs"
-            ],
-            "type": "distribution"
-          },
-          {
-            "device": null,
-            "host": null,
-            "interval": 10,
-            "metric": "aws.dd_forwarder.list_tags_log_group_api_call",
-            "points": "<redacted from snapshot>",
-            "tags": [
-              "forwardername:test_function",
-              "forwarder_memorysize:3008",
-              "forwarder_version:<redacted from snapshot>",
-              "event_type:awslogs"
-            ],
-            "type": "distribution"
-          },
-          {
-            "device": null,
-            "host": null,
-            "interval": 10,
-            "metric": "aws.dd_forwarder.loggroup_cache_write_failure",
-            "points": "<redacted from snapshot>",
-            "tags": [
-              "forwardername:test_function",
-              "forwarder_memorysize:3008",
-              "forwarder_version:<redacted from snapshot>",
-              "event_type:awslogs"
-            ],
-            "type": "distribution"
-          },
-          {
-            "device": null,
-            "host": null,
-            "interval": 10,
             "metric": "aws.dd_forwarder.incoming_events",
             "points": "<redacted from snapshot>",
             "tags": [
               "forwardername:test_function",
               "forwarder_memorysize:3008",
               "forwarder_version:<redacted from snapshot>",
-              "event_type:awslogs"
+              "event_type:awslogs",
+              "dd_lambda_layer:<redacted from snapshot>"
             ],
             "type": "distribution"
           },
@@ -784,7 +743,8 @@
               "forwardername:test_function",
               "forwarder_memorysize:3008",
               "forwarder_version:<redacted from snapshot>",
-              "event_type:awslogs"
+              "event_type:awslogs",
+              "dd_lambda_layer:<redacted from snapshot>"
             ],
             "type": "distribution"
           },
@@ -798,7 +758,8 @@
               "forwardername:test_function",
               "forwarder_memorysize:3008",
               "forwarder_version:<redacted from snapshot>",
-              "event_type:awslogs"
+              "event_type:awslogs",
+              "dd_lambda_layer:<redacted from snapshot>"
             ],
             "type": "distribution"
           },
@@ -812,7 +773,8 @@
               "forwardername:test_function",
               "forwarder_memorysize:3008",
               "forwarder_version:<redacted from snapshot>",
-              "event_type:awslogs"
+              "event_type:awslogs",
+              "dd_lambda_layer:<redacted from snapshot>"
             ],
             "type": "distribution"
           },
@@ -836,7 +798,8 @@
               "aws_account:012345678912",
               "functionname:hello-dog-node-dev-hello12x",
               "region:us-east-1",
-              "service:hello-dog-node-dev-hello12x"
+              "service:hello-dog-node-dev-hello12x",
+              "dd_lambda_layer:<redacted from snapshot>"
             ],
             "type": "distribution"
           },
@@ -847,7 +810,7 @@
             "metric": "hello.js10x.dog-2",
             "points": "<redacted from snapshot>",
             "tags": [
-              "dd_lambda_layer:datadog-nodev12.14.1",
+              "dd_lambda_layer:<redacted from snapshot>",
               "function_arn:arn:aws:lambda:us-east-1:012345678912:function:hello-dog-node-dev-hello12x",
               "forwardername:test_function",
               "forwarder_version:<redacted from snapshot>",
@@ -855,7 +818,8 @@
               "aws_account:012345678912",
               "functionname:hello-dog-node-dev-hello12x",
               "region:us-east-1",
-              "service:hello-dog-node-dev-hello12x"
+              "service:hello-dog-node-dev-hello12x",
+              "dd_lambda_layer:<redacted from snapshot>"
             ],
             "type": "distribution"
           },
@@ -870,7 +834,8 @@
               "cold_start:false",
               "region:us-east-1",
               "aws_account:012345678912",
-              "functionname:hello-dog-node-dev-hello12x"
+              "functionname:hello-dog-node-dev-hello12x",
+              "dd_lambda_layer:<redacted from snapshot>"
             ],
             "type": "distribution"
           },
@@ -885,7 +850,8 @@
               "cold_start:false",
               "region:us-east-1",
               "aws_account:012345678912",
-              "functionname:hello-dog-node-dev-hello12x"
+              "functionname:hello-dog-node-dev-hello12x",
+              "dd_lambda_layer:<redacted from snapshot>"
             ],
             "type": "distribution"
           },
@@ -900,7 +866,8 @@
               "cold_start:false",
               "region:us-east-1",
               "aws_account:012345678912",
-              "functionname:hello-dog-node-dev-hello12x"
+              "functionname:hello-dog-node-dev-hello12x",
+              "dd_lambda_layer:<redacted from snapshot>"
             ],
             "type": "distribution"
           },
@@ -915,7 +882,8 @@
               "cold_start:false",
               "region:us-east-1",
               "aws_account:012345678912",
-              "functionname:hello-dog-node-dev-hello12x"
+              "functionname:hello-dog-node-dev-hello12x",
+              "dd_lambda_layer:<redacted from snapshot>"
             ],
             "type": "distribution"
           }
@@ -923,7 +891,7 @@
       },
       "headers": {
         "Accept": "*/*",
-        "Accept-Encoding": "gzip, deflate",
+        "Accept-Encoding": "gzip, deflate, zstd",
         "Connection": "keep-alive",
         "Content-Encoding": "deflate",
         "Content-Length": "<redacted from snapshot>",

@@ -178,6 +178,10 @@ The <a href="#cloudformation-parameters">environment variables provided on this 
 
 If you encounter issues upgrading to the latest version, check the Troubleshooting section.
 
+### Upgrade to v5.2.0+
+
+Starting version 5.2.0+ Lambda function has been updated to require **Python 3.14**. If upgrading an older forwarder installation to 5.2.0+, ensure AWS Lambda function is configured to use Python 3.14
+
 ### Upgrade to v5.0.0+
 
 **Version 5.0.0 is a major release with breaking changes.** Before upgrading, review the [CHANGELOG.md][25] for detailed information about breaking changes and migration requirements.
@@ -349,7 +353,7 @@ You can run the Forwarder in a VPC private subnet and send data to Datadog over 
 3. When installing the Forwarder with the CloudFormation template:
     1. Set `DdUseVPC` to `true`.
     2. Set `VPCSecurityGroupIds` and `VPCSubnetIds` based on your VPC settings.
-    3. Set `DdFetchLambdaTags`, `DdFetchStepFunctionsTags`, and `DdFetchS3Tags` to `false`, because AWS Resource Groups Tagging API doesn't support PrivateLink.
+    3. If you set any of `DdFetchLambdaTags`, `DdFetchStepFunctionsTags`, or `DdFetchS3Tags` to `true`, add the [AWS Resource Groups Tagging API endpoint][26] to your VPC. If you set `DdFetchLogGroupTags` to `true`, add the [Amazon CloudWatch Logs endpoint][26] to your VPC. Check [this link][27] for further information on how to create required Datadog endpoints, and [this link][28] for creating AWS services endpoints.
 
 ### AWS VPC and proxy support
 
@@ -504,7 +508,7 @@ To test different patterns against your logs, turn on [debug logs](#troubleshoot
 : **[DEPRECATED, use DdEnrichS3Tags]** Let the Forwarder fetch S3 tags using GetResources API calls and apply them to logs and traces. If set to true, permission `tag:GetResources` will be automatically added to the Lambda execution IAM role.
 
 `DdStepFunctionsTraceEnabled`
-: Set to true to enable tracing for all Step Functions.
+: Datadog can generate traces from Step Functions logs. Set to true to enable tracing.
 
 `SourceZipUrl`
 : Do not change unless you know what you are doing. Override the default location of the function source code.
@@ -824,9 +828,10 @@ The value of the `service` tag is determined based on multiple inputs. These inp
 
 1. Log message custom tags: If the log message has a `ddtags` key which contains a `service` tag value, it will be used to override the `service` tag in the log event.
 2. Lambda tags cache (applicable for Lambda logs only): Activating `DdFetchLambdaTags` will fetch and store all Lambda functions tags and will override the `service` tag if it wasn't set previously or was set to a default value i.e. `source` value.
-3. Cloudwatch log group tags cache (applicable for Cloudwatch logs only): Activating `DdFetchLogGroupTags` will fetch and store all Cloudwatch log groups tags which are added to the `ddtags` entry in the log event. If `service` tag value was set in the tags cache it will be used to set the `service` tag for the log event.
-4. Directly setting a `service` tag value in the forwarder's `ddtags` ENV var.
-5. Default value equal to the `source` tag.
+3. Directly setting a `service` tag value in the forwarder's `ddtags` ENV var.
+4. Step Function tags cache (applicable for step Functions logs only): Activating `DdFetchStepFunctionsTags` will fetch and store all Step Functions tags and override `service` tag if wasn't set previously.
+5. Cloudwatch log group tags cache (applicable for Cloudwatch logs only): Activating `DdFetchLogGroupTags` will fetch and store all Cloudwatch log groups tags which are added to the `ddtags` entry in the log event. If `service` tag value was set in the tags cache it will be used to set the `service` tag for the log event.
+6. Default value equal to the `source` tag.
 
 ## Further Reading
 
@@ -859,3 +864,6 @@ Additional helpful documentation, links, and articles:
 [23]: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/transform-aws-serverless.html
 [24]: https://docs.datadoghq.com/logs/log_configuration/processors/?tab=ui#log-date-remapper
 [25]: https://github.com/DataDog/datadog-serverless-functions/blob/master/aws/logs_monitoring/CHANGELOG.md
+[26]: https://docs.aws.amazon.com/vpc/latest/privatelink/aws-services-privatelink-support.html
+[27]: https://docs.datadoghq.com/agent/guide/private-link/?tab=crossregionprivatelinkendpoints#create-your-vpc-endpoint
+[28]: https://docs.aws.amazon.com/vpc/latest/privatelink/create-interface-endpoint.html#create-interface-endpoint

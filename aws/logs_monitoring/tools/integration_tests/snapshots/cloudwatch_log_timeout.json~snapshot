@@ -89,7 +89,7 @@
       ],
       "headers": {
         "Accept": "*/*",
-        "Accept-Encoding": "gzip, deflate",
+        "Accept-Encoding": "gzip, deflate, zstd",
         "Connection": "keep-alive",
         "Content-Length": "<redacted from snapshot>",
         "Content-type": "application/json",
@@ -116,27 +116,14 @@
             "device": null,
             "host": null,
             "interval": 10,
-            "metric": "aws.dd_forwarder.loggroup_local_cache_hit",
-            "points": "<redacted from snapshot>",
-            "tags": [
-              "forwardername:test_function",
-              "forwarder_memorysize:3008",
-              "forwarder_version:<redacted from snapshot>",
-              "event_type:awslogs"
-            ],
-            "type": "distribution"
-          },
-          {
-            "device": null,
-            "host": null,
-            "interval": 10,
             "metric": "aws.dd_forwarder.incoming_events",
             "points": "<redacted from snapshot>",
             "tags": [
               "forwardername:test_function",
               "forwarder_memorysize:3008",
               "forwarder_version:<redacted from snapshot>",
-              "event_type:awslogs"
+              "event_type:awslogs",
+              "dd_lambda_layer:<redacted from snapshot>"
             ],
             "type": "distribution"
           },
@@ -150,7 +137,8 @@
               "forwardername:test_function",
               "forwarder_memorysize:3008",
               "forwarder_version:<redacted from snapshot>",
-              "event_type:awslogs"
+              "event_type:awslogs",
+              "dd_lambda_layer:<redacted from snapshot>"
             ],
             "type": "distribution"
           },
@@ -164,7 +152,8 @@
               "forwardername:test_function",
               "forwarder_memorysize:3008",
               "forwarder_version:<redacted from snapshot>",
-              "event_type:awslogs"
+              "event_type:awslogs",
+              "dd_lambda_layer:<redacted from snapshot>"
             ],
             "type": "distribution"
           },
@@ -177,7 +166,8 @@
             "tags": [
               "region:us-east-1",
               "aws_account:012345678912",
-              "functionname:storms-cloudwatch-event"
+              "functionname:storms-cloudwatch-event",
+              "dd_lambda_layer:<redacted from snapshot>"
             ],
             "type": "distribution"
           }
@@ -185,7 +175,7 @@
       },
       "headers": {
         "Accept": "*/*",
-        "Accept-Encoding": "gzip, deflate",
+        "Accept-Encoding": "gzip, deflate, zstd",
         "Connection": "keep-alive",
         "Content-Encoding": "deflate",
         "Content-Length": "<redacted from snapshot>",
