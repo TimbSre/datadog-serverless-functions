@@ -15,7 +15,7 @@ The Datadog Forwarder is an AWS Lambda function that ships logs from AWS to Data
 -   Forward CloudWatch and S3 logs.
 -   Forward logs from SNS, and Kinesis events to Datadog.
 -   Kinesis data stream events support CloudWatch logs only.
--   Forward metrics, traces, and logs from AWS Lambda functions to Datadog. Datadog recommends to use [Datadog Lambda Extension][1] to monitor Lambda functions.
+-   Forward metrics, traces, and logs from AWS Lambda functions to Datadog. However, instead of using a forwarder, Datadog recommends to use [Datadog Lambda Extension][1] to monitor Lambda functions.
 
 For Serverless customers using the Forwarder to forward metrics, traces, and logs from AWS Lambda logs to Datadog, you should [migrate to the Datadog Lambda Extension][3] to collect telemetry directly from the Lambda execution environments. The Forwarder is still available for use in Serverless Monitoring, but will not be updated to support the latest features.
 
@@ -282,6 +282,17 @@ If you still couldn't figure out, please create a ticket for [Datadog Support][1
 
 If your logs contain an attribute that Datadog parses as a timestamp, you need to make sure that the timestamp is both current and in the correct format. See [Log Date Remapper][24] to learn about which attributes are parsed as timestamps and how to make sure that the timestamp is valid.
 
+### S3 log files containing JSON arrays are ingested as a single event
+
+The Forwarder ingests each line of a log file as a separate event. If your S3 log file contains a JSON array (for example, `[{...}, {...}]`), the entire array is treated as a single log event. Datadog log pipelines and processors cannot split a JSON array into multiple individual events after ingestion.
+
+To ensure each log entry is ingested as a separate event, format your log files as newline-delimited JSON (NDJSON), where each JSON object is on its own line:
+
+```json
+{"key": "value1"}
+{"key": "value2"}
+```
+
 ### Issue creating S3 triggers
 
 In case you encounter the following error when creating S3 triggers, we recommend considering following a fanout architecture proposed by AWS [in this article](https://aws.amazon.com/blogs/compute/fanout-s3-event-notifications-to-multiple-endpoints/)
@@ -483,6 +494,9 @@ The Datadog Forwarder is signed by Datadog. To verify the integrity of the Forwa
 `DdApiKeySecretArn`
 : The ARN of the secret storing the Datadog API key, if you already have it stored in Secrets Manager. You must store the secret as a plaintext, rather than a key-value pair.
 
+`DdApiKeySsmParameterName`
+: The name of the SSM parameter containing the Datadog API key. If set, both `DdApiKey` and `DdApiKeySecretArn` are ignored.
+
 `DdSite`
 : The [Datadog site][13] that your metrics and logs will be sent to. Your Datadog site is {{< region-param key="dd_site" code="true" >}}.
 
@@ -663,6 +677,12 @@ If you are installing the Forwarder manually, convert the parameter names from P
 
 `DD_API_KEY_SECRET_ARN`
 : The ARN of the secret storing the Datadog API key, if you already have it stored in Secrets Manager. You must store the secret as a plaintext, rather than a key-value pair.
+
+`DD_API_KEY_SSM_NAME`
+: The name of the parameter in AWS Systems Manager (SSM) Parameter Store containing the Datadog API key. Takes precedence over `DD_KMS_API_KEY` and `DD_API_KEY`.
+
+`DD_KMS_API_KEY`
+: The Datadog API key encrypted with AWS KMS. Takes precedence over `DD_API_KEY`.
 
 `DD_SITE`
 : The [Datadog site][13] that your metrics and logs will be sent to. Your Datadog site is {{< region-param key="dd_site" code="true" >}}.
