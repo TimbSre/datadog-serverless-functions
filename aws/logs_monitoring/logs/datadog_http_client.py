@@ -6,7 +6,6 @@
 
 import logging
 import os
-from concurrent.futures import as_completed
 
 from requests_futures.sessions import FuturesSession
 
@@ -57,6 +56,9 @@ class DatadogHTTPClient(object):
     if storage_tag != "":
         _HEADERS["DD-STORAGE-TAG"] = storage_tag
 
+    if os.environ.get("DD_STEP_FUNCTIONS_TRACE_ENABLED", "false").lower() == "true":
+        _HEADERS["DD-STEP-FUNCTIONS-TRACE-ENABLED"] = "true"
+
     def __init__(
         self, host, port, no_ssl, skip_ssl_validation, api_key, scrubber, timeout=10
     ):
@@ -67,7 +69,6 @@ class DatadogHTTPClient(object):
         self._timeout = timeout
         self._session = None
         self._ssl_validation = not skip_ssl_validation
-        self._futures = []
 
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug(
@@ -81,13 +82,6 @@ class DatadogHTTPClient(object):
         self._session.headers.update(self._HEADERS)
 
     def _close(self):
-        # Resolve all the futures and log exceptions if any
-        for future in as_completed(self._futures):
-            try:
-                future.result()
-            except Exception as e:
-                logger.error(f"Exception while forwarding logs: {e}")
-
         self._session.close()
 
     def send(self, logs):
@@ -101,11 +95,11 @@ class DatadogHTTPClient(object):
         if DD_USE_COMPRESSION:
             data = compress_logs(data, DD_COMPRESSION_LEVEL)
 
-        # FuturesSession returns immediately with a future object
-        future = self._session.post(
+        # Resolve the future here so callers can attribute failures to this batch.
+        response = self._session.post(
             self._url, data, timeout=self._timeout, verify=self._ssl_validation
-        )
-        self._futures.append(future)
+        ).result()
+        response.raise_for_status()
 
     def __enter__(self):
         self._connect()

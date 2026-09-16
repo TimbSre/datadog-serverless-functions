@@ -3,14 +3,14 @@ Description: Pushes logs, metrics and traces from AWS to Datadog.
 Mappings:
   Constants:
     DdForwarder:
-      Version: 5.4.1
-      LayerVersion: "99"
+      Version: 5.4.13
+      LayerVersion: "112"
 Parameters:
   DdApiKey:
     Type: String
     NoEcho: true
     Default: ""
-    Description: The Datadog API key, which can be found from the APIs page (/account/settings#api). It will be stored in AWS Secrets Manager securely. If DdApiKeySecretArn is also set, this value is ignored.
+    Description: The Datadog API key, which can be found on the API Keys page (/organization-settings/api-keys). It will be stored in AWS Secrets Manager securely. If DdApiKeySecretArn is also set, this value is ignored.
   DdApiKeySecretArn:
     Type: String
     AllowedPattern: "arn:.*:secretsmanager:.*"
@@ -19,8 +19,8 @@ Parameters:
   DdApiKeySsmParameterName:
     Type: String
     Default: "/my/parameter/path"
-    AllowedPattern: "^/[a-zA-Z0-9/_.-]*$"
-    Description: The name of the SSM parameter containing Datadog's API key. If set, both DdApiKey and DdApiKeySecretArn will be ignored, the forwarder will use the SSM parameter name to fetch the API key.
+    AllowedPattern: "^(/[a-zA-Z0-9/_.-]*|arn:[a-z0-9-]*:ssm:[a-z0-9-]+:[0-9]{12}:parameter/[a-zA-Z0-9/_.-]+)$"
+    Description: The name of the SSM parameter containing Datadog's API key, or its full ARN when the parameter lives in another region. If set, both DdApiKey and DdApiKeySecretArn will be ignored, the forwarder will use the SSM parameter name to fetch the API key.
   DdSite:
     Type: String
     Default: datadoghq.com
@@ -107,13 +107,6 @@ Parameters:
       - true
       - false
     Description: (DEPRECATED in favor of DdEnrichCloudwatchTags) Let the forwarder fetch Log Group tags using ListTagsLogGroup and apply them to logs, metrics and traces. If set to true, permission logs:ListTagsLogGroup will be automatically added to the Lambda execution IAM role. The tags are cached in memory and S3 so that they'll only be fetched when the function cold starts or when the TTL (1 hour) expires. The forwarder increments the aws.lambda.enhanced.list_tags_log_group_api_call metric for each API call made.
-  DdFetchStepFunctionsTags:
-    Type: String
-    Default: true
-    AllowedValues:
-      - true
-      - false
-    Description: Let the forwarder fetch Step Functions tags using GetResources API calls and apply them to logs, metrics and traces. If set to true, permission tag:GetResources will be automatically added to the Lambda execution IAM role. The tags are cached in memory and S3 so that they'll only be fetched when the function cold starts or when the TTL (1 hour) expires. The forwarder increments the aws.lambda.enhanced.get_resources_api_calls metric for each API call made.
   DdFetchS3Tags:
     Type: String
     Default: false
@@ -366,7 +359,6 @@ Conditions:
   SetDdSkipSslValidation: !Equals [!Ref DdSkipSslValidation, true]
   SetDdFetchLambdaTags: !Equals [!Ref DdFetchLambdaTags, true]
   SetDdFetchLogGroupTags: !Equals [!Ref DdFetchLogGroupTags, true]
-  SetDdFetchStepFunctionsTags: !Equals [!Ref DdFetchStepFunctionsTags, true]
   CreateS3Bucket: !And
     - !Or
       - !Equals [!Ref DdFetchLogGroupTags, true]
@@ -402,7 +394,6 @@ Conditions:
     - !Equals [!Ref DdForwarderBucketsAccessLogsTarget, ""]
   ShouldDdFetchTags: !Or
     - !Equals [!Ref DdFetchLambdaTags, true]
-    - !Equals [!Ref DdFetchStepFunctionsTags, true]
     - !Equals [!Ref DdFetchS3Tags, true]
   SetForwarderBucket: !Or
     - !Condition CreateS3Bucket
@@ -522,10 +513,6 @@ Resources:
           DD_FETCH_LOG_GROUP_TAGS: !If
             - SetDdFetchLogGroupTags
             - !Ref DdFetchLogGroupTags
-            - !Ref AWS::NoValue
-          DD_FETCH_STEP_FUNCTIONS_TAGS: !If
-            - SetDdFetchStepFunctionsTags
-            - !Ref DdFetchStepFunctionsTags
             - !Ref AWS::NoValue
           DD_NO_SSL: !If
             - SetDdNoSsl
@@ -1166,7 +1153,6 @@ Metadata:
           - DdEnrichCloudwatchTags
           - DdFetchLambdaTags
           - DdFetchLogGroupTags
-          - DdFetchStepFunctionsTags
           - DdFetchS3Tags
           - DdStepFunctionsTraceEnabled
           - DdEnhancedMetrics

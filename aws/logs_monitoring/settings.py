@@ -33,7 +33,7 @@ def get_env_var(envvar, default, boolean=False):
 ## It can be found here:
 ##
 ##   * Datadog US Site: https://app.datadoghq.com/organization-settings/api-keys
-##   * Datadog EU Site: https://app.datadoghq.eu/account/settings#api
+##   * Datadog EU Site: https://app.datadoghq.eu/organization-settings/api-keys
 ##
 ## Must be set if one of the following is not set: DD_API_KEY_SECRET_ARN, DD_API_KEY_SSM_NAME, DD_KMS_API_KEY
 #
@@ -162,15 +162,37 @@ EXCLUDE_AT_MATCH = get_env_var("EXCLUDE_AT_MATCH", default=None)
 boto3_config = botocore.config.Config(
     connect_timeout=5, read_timeout=5, retries={"max_attempts": 2}
 )
+
+
+def get_region_from_arn(arn):
+    """
+    Return the region encoded in an ARN, or None when the value is not an ARN.
+
+    boto3 resolves the client region from the environment, which on Lambda is
+    always the region the function runs in. Secrets Manager and SSM do not
+    redirect a request based on the ARN it carries, so a secret or parameter
+    that lives in another region is only reachable when its region is passed
+    to the client explicitly. Returning None keeps the default resolution for
+    values that are not ARNs, such as a plain SSM parameter name.
+    """
+    # arn:<partition>:<service>:<region>:<account-id>:<resource>
+    parts = arn.split(":")
+    if len(parts) < 6 or parts[0] != "arn" or not parts[3]:
+        return None
+    return parts[3]
+
+
 # DD API Key
 # Check if the DD_API_KEY_SECRET_ARN environment variable is set
 if "DD_API_KEY_SECRET_ARN" in os.environ:
     SECRET_ARN = os.environ["DD_API_KEY_SECRET_ARN"]
     logger.debug(f"Fetching the Datadog API key from SecretsManager: {SECRET_ARN}")
 
-    # Fetch the secret from Secrets Manager
+    # Fetch the secret from Secrets Manager, from the region the ARN points to
     secret_response = boto3.client(
-        "secretsmanager", config=boto3_config
+        "secretsmanager",
+        region_name=get_region_from_arn(SECRET_ARN),
+        config=boto3_config,
     ).get_secret_value(SecretId=SECRET_ARN)
 
     # The secret could be either a plain string or a JSON object
@@ -200,9 +222,11 @@ if "DD_API_KEY_SECRET_ARN" in os.environ:
 elif "DD_API_KEY_SSM_NAME" in os.environ:
     SECRET_NAME = os.environ["DD_API_KEY_SSM_NAME"]
     logger.debug(f"Fetching the Datadog API key from SSM: {SECRET_NAME}")
-    DD_API_KEY = boto3.client("ssm", config=boto3_config).get_parameter(
-        Name=SECRET_NAME, WithDecryption=True
-    )["Parameter"]["Value"]
+    DD_API_KEY = boto3.client(
+        "ssm",
+        region_name=get_region_from_arn(SECRET_NAME),
+        config=boto3_config,
+    ).get_parameter(Name=SECRET_NAME, WithDecryption=True)["Parameter"]["Value"]
 elif "DD_KMS_API_KEY" in os.environ:
     ENCRYPTED = os.environ["DD_KMS_API_KEY"]
     logger.debug(f"Fetching the Datadog API key from KMS: {ENCRYPTED}")
@@ -250,24 +274,31 @@ def is_api_key_valid():
     # Validate the API key
     logger.debug("Validating the Datadog API key")
 
-    with requests.Session() as s:
-        retries = requests.adapters.Retry(
-            total=5, backoff_factor=1, status_forcelist=[429, 500, 502, 503, 504]
-        )
-
-        s.mount("http://", requests.adapters.HTTPAdapter(max_retries=retries))
-        s.mount("https://", requests.adapters.HTTPAdapter(max_retries=retries))
-
-        validation_res = s.get(
-            "{}/api/v1/validate?api_key={}".format(DD_API_URL, DD_API_KEY),
-            verify=(not DD_SKIP_SSL_VALIDATION),
-            timeout=10,
-        )
-        if not validation_res.ok:
-            logger.error(
-                f"Datadog API key validation failed (HTTP {validation_res.status_code}). Verify your API key is correct and DD_SITE matches your Datadog account region (current: {DD_SITE}). See: https://docs.datadoghq.com/getting_started/site/"
+    try:
+        with requests.Session() as s:
+            retries = requests.adapters.Retry(
+                total=5, backoff_factor=1, status_forcelist=[429, 500, 502, 503, 504]
             )
-            return False
+
+            s.mount("http://", requests.adapters.HTTPAdapter(max_retries=retries))
+            s.mount("https://", requests.adapters.HTTPAdapter(max_retries=retries))
+
+            validation_res = s.get(
+                "{}/api/v1/validate?api_key={}".format(DD_API_URL, DD_API_KEY),
+                verify=(not DD_SKIP_SSL_VALIDATION),
+                timeout=10,
+            )
+            if not validation_res.ok:
+                logger.error(
+                    f"Datadog API key validation failed (HTTP {validation_res.status_code}). Verify your API key is correct and DD_SITE matches your Datadog account region (current: {DD_SITE}). See: https://docs.datadoghq.com/getting_started/site/"
+                )
+                return False
+    except requests.exceptions.RequestException as e:
+        logger.warning(
+            f"Could not validate Datadog API key due to a network error: {e}. "
+            "Proceeding without validation."
+        )
+        return False
 
     return True
 
@@ -285,10 +316,6 @@ DD_FETCH_LOG_GROUP_TAGS = get_env_var(
 
 DD_FETCH_LAMBDA_TAGS = get_env_var(
     "DD_FETCH_LAMBDA_TAGS", default="false", boolean=True
-)
-
-DD_FETCH_STEP_FUNCTIONS_TAGS = get_env_var(
-    "DD_FETCH_STEP_FUNCTIONS_TAGS", default="false", boolean=True
 )
 
 
@@ -321,10 +348,6 @@ def get_fetch_lambda_tags():
     return DD_FETCH_LAMBDA_TAGS
 
 
-def get_fetch_step_functions_tags():
-    return DD_FETCH_STEP_FUNCTIONS_TAGS
-
-
 def get_enrich_s3_tags():
     return DD_ENRICH_S3_TAGS
 
@@ -337,7 +360,7 @@ DD_SOURCE = "ddsource"
 DD_CUSTOM_TAGS = "ddtags"
 DD_SERVICE = "service"
 DD_HOST = "host"
-DD_FORWARDER_VERSION = "5.4.1"
+DD_FORWARDER_VERSION = "5.4.13"
 
 # CONST STRINGS
 AWS_STRING = "aws"
@@ -360,9 +383,6 @@ DD_S3_CACHE_DIRNAME = "cache"
 DD_S3_LAMBDA_CACHE_FILENAME = "lambda.json"
 DD_S3_LAMBDA_CACHE_LOCK_FILENAME = "lambda.lock"
 
-DD_S3_STEP_FUNCTIONS_CACHE_FILENAME = "step-functions-cache.json"
-DD_S3_STEP_FUNCTIONS_CACHE_LOCK_FILENAME = "step-functions-cache.lock"
-
 DD_S3_TAGS_CACHE_FILENAME = "s3.json"
 DD_S3_TAGS_CACHE_LOCK_FILENAME = "s3.lock"
 
@@ -371,7 +391,6 @@ DD_S3_LOG_GROUP_CACHE_DIRNAME = "log-group"
 DD_TAGS_CACHE_TTL_SECONDS = int(get_env_var("DD_TAGS_CACHE_TTL_SECONDS", default=300))
 DD_S3_CACHE_LOCK_TTL_SECONDS = 60
 GET_RESOURCES_LAMBDA_FILTER = "lambda"
-GET_RESOURCES_STEP_FUNCTIONS_FILTER = "states"
 GET_RESOURCES_S3_FILTER = "s3:bucket"
 
 
